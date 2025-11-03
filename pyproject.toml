@@ -1,0 +1,24 @@
+[project]
+name = "mlops-ftiad-2025"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi (>=0.120.4,<0.121.0)",
+    "uvicorn (>=0.38.0,<0.39.0)",
+    "scikit-learn (>=1.7.2,<2.0.0)",
+    "grpcio (>=1.76.0,<2.0.0)",
+    "protobuf (>=6.33.0,<7.0.0)",
+    "streamlit (>=1.51.0,<2.0.0)",
+    "python-jose[cryptography] (>=3.5.0,<4.0.0)",
+    "passlib[bcrypt] (>=1.7.4,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
