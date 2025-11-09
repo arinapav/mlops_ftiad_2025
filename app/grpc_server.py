@@ -1,10 +1,10 @@
 from concurrent import futures
 import grpc
-from . import model_service_pb2
-from . import model_service_pb2_grpc
-from .models import ModelTrainer
-from .storage import Storage
-from .logger import log
+import app.model_service_pb2
+import app.model_service_pb2_grpc
+from app.models import ModelTrainer
+from app.storage import Storage
+from app.logger import log
 import pickle
 
 class ModelService(model_service_pb2_grpc.ModelServiceServicer):
