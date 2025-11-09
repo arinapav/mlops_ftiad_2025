@@ -10,20 +10,20 @@ from app.logger import log
 
 class ModelService(model_service_pb2_grpc.ModelServiceServicer):
     """gRPC сервис для работы с моделями."""
-    
+
     def __init__(self):
         """Инициализация сервиса."""
         self.trainer = ModelTrainer()
         self.storage = Storage()
-    
+
     def TrainModel(self, request, context):
         """
         Обучение модели через gRPC.
-        
+
         Args:
             request: TrainRequest с данными для обучения
             context: gRPC context
-            
+
         Returns:
             TrainResponse со статусом
         """
@@ -31,6 +31,16 @@ class ModelService(model_service_pb2_grpc.ModelServiceServicer):
             log.info(f"TRAIN gRPC {request.name}")
             data = pickle.loads(request.data)
             params = dict(request.params)
+            
+            if request.name == "forest":
+                if 'n_estimators' in params:
+                    params['n_estimators'] = int(params['n_estimators'])
+                if 'max_depth' in params:
+                    params['max_depth'] = int(params['max_depth'])
+            elif request.name == "logreg":
+                if 'max_iter' in params:
+                    params['max_iter'] = int(params['max_iter'])
+            
             model = self.trainer.train(request.name, data['X'], data['y'], **params)
             self.storage.save(request.name, model)
             return model_service_pb2.TrainResponse(status="ok")
@@ -39,30 +49,30 @@ class ModelService(model_service_pb2_grpc.ModelServiceServicer):
             context.set_details(str(e))
             context.set_code(grpc.StatusCode.INTERNAL)
             return model_service_pb2.TrainResponse(status="error")
-    
+
     def ListModels(self, request, context):
         """
         Получение списка доступных моделей.
-        
+
         Args:
             request: ListRequest (пустой)
             context: gRPC context
-            
+
         Returns:
             ListResponse со списком моделей
         """
         log.info("List models gRPC")
         models = list(self.trainer.models.keys())
         return model_service_pb2.ListResponse(models=models)
-    
+
     def Predict(self, request, context):
         """
         Предсказание с помощью обученной модели.
-        
+
         Args:
             request: PredictRequest с именем модели и признаками
             context: gRPC context
-            
+
         Returns:
             PredictResponse с предсказанием
         """
