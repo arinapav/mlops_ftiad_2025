@@ -1,70 +1,99 @@
 from concurrent import futures
 import grpc
-import app.model_service_pb2
-import app.model_service_pb2_grpc
+import pickle
+from app import model_service_pb2
+from app import model_service_pb2_grpc
 from app.models import ModelTrainer
 from app.storage import Storage
 from app.logger import log
-import pickle
+
 
 class ModelService(model_service_pb2_grpc.ModelServiceServicer):
+    """gRPC сервис для работы с моделями."""
+    
     def __init__(self):
+        """Инициализация сервиса."""
         self.trainer = ModelTrainer()
-
+        self.storage = Storage()
+    
     def TrainModel(self, request, context):
-        log.info(f"TRAIN gRPC {request.name}")
-        data = pickle.loads(request.data)
-        model = self.trainer.train(request.name, data.X, data.y, 
-**dict(request.params))
-        Storage.save(request.name, model)
-        return model_service_pb2.TrainResponse(status="ok")
-
+        """
+        Обучение модели через gRPC.
+        
+        Args:
+            request: TrainRequest с данными для обучения
+            context: gRPC context
+            
+        Returns:
+            TrainResponse со статусом
+        """
+        try:
+            log.info(f"TRAIN gRPC {request.name}")
+            data = pickle.loads(request.data)
+            params = dict(request.params)
+            model = self.trainer.train(request.name, data['X'], data['y'], **params)
+            self.storage.save(request.name, model)
+            return model_service_pb2.TrainResponse(status="ok")
+        except Exception as e:
+            log.error(f"Training error: {e}")
+            context.set_details(str(e))
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return model_service_pb2.TrainResponse(status="error")
+    
     def ListModels(self, request, context):
+        """
+        Получение списка доступных моделей.
+        
+        Args:
+            request: ListRequest (пустой)
+            context: gRPC context
+            
+        Returns:
+            ListResponse со списком моделей
+        """
         log.info("List models gRPC")
-        return model_service_pb2.ListResponse(models=["forest", "logreg"])
-
+        models = list(self.trainer.models.keys())
+        return model_service_pb2.ListResponse(models=models)
+    
     def Predict(self, request, context):
-        log.info(f"Predict gRPC {request.name}")
-        model = Storage.load(request.name)
-        if not model:
-            context.set_details("Model not found")
-            context.set_code(grpc.StatusCode.NOT_FOUND)
+        """
+        Предсказание с помощью обученной модели.
+        
+        Args:
+            request: PredictRequest с именем модели и признаками
+            context: gRPC context
+            
+        Returns:
+            PredictResponse с предсказанием
+        """
+        try:
+            log.info(f"Predict gRPC {request.name}")
+            model = self.storage.load(request.name)
+            if not model:
+                context.set_details("Model not found")
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                return model_service_pb2.PredictResponse()
+            pred = model.predict([list(request.features)])[0]
+            return model_service_pb2.PredictResponse(pred=float(pred))
+        except Exception as e:
+            log.error(f"Prediction error: {e}")
+            context.set_details(str(e))
+            context.set_code(grpc.StatusCode.INTERNAL)
             return model_service_pb2.PredictResponse()
-        pred = model.predict([request.features])[0]
-        return model_service_pb2.PredictResponse(pred=pred)
-	
-    def RetrainModel(self, request, context):
-        """Retrain an existing model."""
-        log.info(f"RETRAIN gRPC {request.model_id}")
-        model = Storage.load(request.model_id)
-        if not model:
-            context.set_code(grpc.StatusCode.NOT_FOUND)
-            return app.model_service_pb2.TrainResponse(status="not found")
-        data = pickle.loads(request.data)
-        model_type = Storage.load_metadata().get(request.model_id, {}).get("type", "logreg")
-        new_model = self.trainer.train(model_type, data["X"], data["y"], **dict(request.params))
-        Storage.save(request.model_id, new_model, model_type, dict(request.params))
-        return app.model_service_pb2.TrainResponse(status="retrained")
 
-    def DeleteModel(self, request, context):
-        """Delete a trained model."""
-        log.info(f"DELETE gRPC {request.model_id}")
-        if Storage.delete(request.model_id):
-            return app.model_service_pb2.TrainResponse(status="deleted")
-        context.set_code(grpc.StatusCode.NOT_FOUND)
-        return app.model_service_pb2.TrainResponse(status="not found")
-
-    def Health(self, request, context):
-        """Check the health status of the service."""
-        log.info("Health check gRPC")
-        return app.model_service_pb2.TrainResponse(status="healthy")
 
 def serve():
+    """Запуск gRPC сервера."""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    model_service_pb2_grpc.add_ModelServiceServicer_to_server(ModelService(), server)
+    model_service_pb2_grpc.add_ModelServiceServicer_to_server(
+        ModelService(), server
+    )
     server.add_insecure_port('[::]:50051')
+    log.info("gRPC server starting on port 50051")
     server.start()
+    print("gRPC server started on port 50051")
     server.wait_for_termination()
+
 
 if __name__ == '__main__':
     serve()

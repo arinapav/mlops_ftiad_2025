@@ -6,13 +6,19 @@ from app.storage import Storage
 from app.logger import log
 from jose import jwt
 from passlib.context import CryptContext
+import os
+from dotenv import load_dotenv
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="passlib")
 
 app = FastAPI(title="MLOps HW1")
 trainer = ModelTrainer()
 storage = Storage()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 pwd_context = CryptContext(schemes=["bcrypt"])
-SECRET_KEY = "4a8f3fa13a5252cdb12faf79fdea8dcb0d7f3e7914b9e291911ca386f03960c8"
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY", "default-dev-key")
+
 
 @app.get("/")
 async def root():

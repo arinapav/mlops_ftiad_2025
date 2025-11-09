@@ -15,7 +15,7 @@ class Storage:
         try:
             with open(f"models/{name}.pkl", "rb") as f:
                 return pickle.load(f)
-        except:
+        except FileNotFoundError:
             return None
 
     @staticmethod
@@ -23,5 +23,5 @@ class Storage:
         try:
             os.remove(f"models/{name}.pkl")
             return True
-        except:
+        except FileNotFoundError:
             return False
