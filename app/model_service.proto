@@ -1,0 +1,32 @@
+syntax = "proto3";
+package model;
+
+service ModelService {
+  rpc TrainModel (TrainRequest) returns (TrainResponse);
+  rpc ListModels (ListRequest) returns (ListResponse);
+  rpc Predict (PredictRequest) returns (PredictResponse);
+}
+
+message TrainRequest {
+  string name = 1;
+  map<string, float> params = 2;
+  bytes data = 3;
+}
+
+message TrainResponse {
+  string status = 1;
+}
+
+message ListRequest {}
+message ListResponse {
+  repeated string models = 1;
+}
+
+message PredictRequest {
+  string name = 1;
+  repeated float features = 2;
+}
+
+message PredictResponse {
+  float pred = 1;
+}
