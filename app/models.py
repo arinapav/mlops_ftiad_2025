@@ -18,8 +18,11 @@ class ModelTrainer:
         y = np.array([0, 1, 0])
         return X, y
         
-    def train(self, model_type, dataset_name="data", **params):
+    def train(self, model_type: str, X=None, y=None, dataset_name: str = "data", **params):
         try:
+            # если X или y не передали — загружаем по имени датасета
+            if X is None or y is None:
+                X, y = self.load_dataset(dataset_name)
             # Начинаем эксперимент в MLflow
             with mlflow.start_run():
                 # Логируем параметры
@@ -32,9 +35,13 @@ class ModelTrainer:
                 
                 # Создаем и обучаем модель
                 if model_type == "forest":
-                    model = RandomForestClassifier(**params)
+                    allowed_params = ["n_estimators", "max_depth", "random_state", "n_jobs"]
+                    model_params = {k: v for k, v in params.items() if k in allowed_params}
+                    model = RandomForestClassifier(**model_params)
                 elif model_type == "logreg":
-                    model = LogisticRegression(**params)
+                    allowed_params = ["max_iter", "C", "random_state"]
+                    model_params = {k: v for k, v in params.items() if k in allowed_params}
+                    model = LogisticRegression(**model_params)
                 else:
                     raise ValueError(f"Unknown model type: {model_type}")
                 
