@@ -34,13 +34,13 @@ mlflow-down:
 
 # === Minio: создание бакетов ===
 init-buckets:
-	@echo "Ожидаем готовности Minio (30 сек)..."
-	sleep 30
-	@echo "Создаём бакеты..."
-	docker compose exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
-	docker compose exec minio mc mb local/models || true
-	docker compose exec minio mc mb local/datasets || true
-	docker compose exec minio mc mb local/mlflow-artifacts || true
+	@echo "Creating MinIO buckets..."
+	@docker compose exec minio mc alias set local http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
+	@docker compose exec minio mc mb local/models --ignore-existing 2>/dev/null || true
+	@docker compose exec minio mc mb local/datasets --ignore-existing 2>/dev/null || true
+	@docker compose exec minio mc mb local/mlflow-artifacts --ignore-existing 2>/dev/null || true
+	@docker compose exec minio mc anonymous set public local/models 2>/dev/null || true
+	@echo "MinIO buckets created"
 # DVC
 dvc-init:
 	@echo "Настройка DVC..."

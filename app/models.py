@@ -1,74 +1,58 @@
-import subprocess
-import pandas as pd
 import mlflow
 import mlflow.sklearn
+import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-import os
-import time
-from app.logger import log
-
-# Правильный импорт для DVC 3.x
-try:
-    from dvc.api import DVCFileSystem
-    fs = DVCFileSystem(".")
-except ImportError:
-    log.error("DVC не установлен")
-    raise
+import pickle
 
 class ModelTrainer:
     def __init__(self):
-        self.models = {
-            "forest": RandomForestClassifier,
-            "logreg": LogisticRegression
-        }
-        mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000'))
-
-    def save_and_version_dataset(self, X, y, dataset_name="data"):
-        df = pd.DataFrame(X)
-        df['target'] = y
-        path = f"datasets/{dataset_name}.csv"
-        df.to_csv(path, index=False)
+        # Настраиваем MLflow
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
+        mlflow.set_experiment("mlops-hw2")
+        
+    def load_dataset(self, dataset_name):
+        # Простая заглушка - в реальности загружайте данные из DVC
+        import numpy as np
+        X = np.array([[1, 2], [3, 4], [5, 6]])
+        y = np.array([0, 1, 0])
+        return X, y
+        
+    def train(self, model_type, dataset_name="data", **params):
         try:
-            subprocess.run(["dvc", "add", path], check=True)
-            subprocess.run(["git", "add", f"{path}.dvc"], check=True)
-            subprocess.run(["git", "commit", "-m", f"Add dataset {dataset_name}"], check=True)
-            subprocess.run(["dvc", "push"], check=True)
-            log.info(f"Датасет {dataset_name} заверсионирован")
-        except subprocess.CalledProcessError as e:
-            log.error(f"DVC error: {e}")
-
-    def load_dataset(self, dataset_name="data"):
-        path = f"datasets/{dataset_name}.csv"
-        try:
-            subprocess.run(["dvc", "pull", f"{path}.dvc"], check=True)
-            df = pd.read_csv(path)
-            X = df.drop('target', axis=1).values
-            y = df['target'].values
-            return X, y
+            # Начинаем эксперимент в MLflow
+            with mlflow.start_run():
+                # Логируем параметры
+                mlflow.log_params(params)
+                mlflow.log_param("model_type", model_type)
+                mlflow.log_param("dataset", dataset_name)
+                
+                # Загружаем данные
+                X, y = self.load_dataset(dataset_name)
+                
+                # Создаем и обучаем модель
+                if model_type == "forest":
+                    model = RandomForestClassifier(**params)
+                elif model_type == "logreg":
+                    model = LogisticRegression(**params)
+                else:
+                    raise ValueError(f"Unknown model type: {model_type}")
+                
+                model.fit(X, y)
+                
+                # Логируем метрики
+                accuracy = model.score(X, y)
+                mlflow.log_metric("accuracy", accuracy)
+                
+                # Сохраняем модель в MLflow
+                mlflow.sklearn.log_model(model, "model")
+                
+                return model
+                
         except Exception as e:
-            log.error(f"Ошибка загрузки датасета: {e}")
+            print(f"Error in training: {e}")
             raise
 
-    def train(self, name: str, X=None, y=None, dataset_name="data", **params):
-        if name not in self.models:
-            raise ValueError("Нет такой модели")
-
-        if X is not None and y is not None:
-            self.save_and_version_dataset(X, y, dataset_name)
-
-        X, y = self.load_dataset(dataset_name)
-
-        with mlflow.start_run(run_name=name):
-            model_class = self.models[name]
-            model = model_class(**params)
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-            model.fit(X_train, y_train)
-            acc = accuracy_score(y_test, model.predict(X_test))
-            mlflow.log_metric("accuracy", acc)
-            mlflow.log_params(params)
-            mlflow.sklearn.log_model(model, "model")
-            log.info(f"Модель {name} обучена, accuracy: {acc}")
-            return model
+    @property
+    def models(self):
+        return {"forest": RandomForestClassifier, "logreg": LogisticRegression}

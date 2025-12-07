@@ -13,8 +13,20 @@ class ModelService(model_service_pb2_grpc.ModelServiceServicer):
 
     def __init__(self):
         """Инициализация сервиса."""
+        retries = 30
+        for i in range(retries):
+            try:
+                self.storage = Storage()
+                log.info("Storage initialized successfully")
+                break
+            except Exception as e:
+                if i == retries - 1:  # Последняя попытка
+                    log.error(f"Failed to initialize Storage after {retries} attempts: {e}")
+                    raise
+                log.warning(f"Storage initialization failed (attempt {i+1}/{retries}), retrying...")
+                time.sleep(2)
+        
         self.trainer = ModelTrainer()
-        self.storage = Storage()
 
     def TrainModel(self, request, context):
         """

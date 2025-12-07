@@ -16,6 +16,14 @@ RUN pip install --no-cache-dir poetry && \
 # Копируем код
 COPY . .
 
+COPY scripts/setup_dvc.sh /setup_dvc.sh
+RUN chmod +x /setup_dvc.sh
+
+# Запускаем настройку DVC при старте
+CMD /setup_dvc.sh && \
+    poetry run uvicorn app.api:app --host 0.0.0.0 --port 8000 & \
+    poetry run python -m app.grpc_server & \
+    poetry run streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
 # Создаём нужные папки
 RUN mkdir -p datasets models .dvc
 

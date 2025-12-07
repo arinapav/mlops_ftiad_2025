@@ -1,10 +1,10 @@
+# app/storage.py
 import boto3
 import botocore
 import pickle
 import io
-import time
 import os
-from botocore.exceptions import ClientError, EndpointConnectionError
+from botocore.exceptions import ClientError
 from app.logger import log
 
 class Storage:
@@ -13,25 +13,20 @@ class Storage:
         access_key = os.getenv('MINIO_ACCESS_KEY', 'minioadmin')
         secret_key = os.getenv('MINIO_SECRET_KEY', 'minioadmin')
 
-        # Ждём, пока Minio станет доступен (максимум 60 сек)
-        for i in range(60):
-            try:
-                self.s3 = boto3.client(
-                    's3',
-                    endpoint_url=endpoint,
-                    aws_access_key_id=access_key,
-                    aws_secret_access_key=secret_key,
-                    config=boto3.session.Config(signature_version='s3v4')
-                )
-                self.s3.head_bucket(Bucket='models')
-                log.info("Minio подключён")
-                break
-            except (EndpointConnectionError, ClientError) as e:
-                log.warning(f"Minio ещё не готов... ждём {i+1}/60 сек")
-                time.sleep(1)
-        else:
-            log.error("Не удалось подключиться к Minio")
-            raise Exception("Minio недоступен")
+        try:
+            self.s3 = boto3.client(
+                's3',
+                endpoint_url=endpoint,
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+                config=boto3.session.Config(signature_version='s3v4')
+            )
+            # Простая проверка подключения
+            self.s3.list_buckets()
+            log.info("Connected to MinIO")
+        except Exception as e:
+            log.error(f"Cannot connect to MinIO: {e}")
+            raise Exception(f"MinIO connection failed: {str(e)}")
 
         self.bucket = 'models'
         self._ensure_bucket()
@@ -39,17 +34,17 @@ class Storage:
     def _ensure_bucket(self):
         try:
             self.s3.create_bucket(Bucket=self.bucket)
-            log.info(f"Бакет {self.bucket} создан")
+            log.info(f"Bucket {self.bucket} created")
         except ClientError as e:
-            if e.response['Error']['Code'] != 'BucketAlreadyOwnedByYou':
-                pass
+            if e.response['Error']['Code'] not in ['BucketAlreadyOwnedByYou', 'BucketAlreadyExists']:
+                log.warning(f"Could not create bucket: {e}")
 
     def save(self, name: str, model):
         buffer = io.BytesIO()
         pickle.dump(model, buffer)
         buffer.seek(0)
         self.s3.put_object(Bucket=self.bucket, Key=f"{name}.pkl", Body=buffer)
-        log.info(f"Модель {name} сохранена в Minio")
+        log.info(f"Model {name} saved")
 
     def load(self, name: str):
         try:

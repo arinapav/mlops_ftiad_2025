@@ -1,4 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from typing import Optional
+import subprocess
+import os
+import logging
+
+# Настройка логирования
+logger = logging.getLogger(__name__)
+
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+import shutil
+import pandas as pd
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from app.models import ModelTrainer
@@ -90,6 +100,56 @@ async def delete_model(model_id: str):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.post("/upload_dataset/")
+async def upload_dataset(
+    file: UploadFile = File(...),
+    dataset_name: str = Form("dataset.csv")
+):
+    """Загрузить датасет и сохранить в локальную папку"""
+    try:
+        # Создаем папку datasets если её нет
+        os.makedirs("/app/datasets", exist_ok=True)
+        
+        # Определяем путь для сохранения
+        if not dataset_name.endswith('.csv'):
+            dataset_name += '.csv'
+        
+        file_path = f"/app/datasets/{dataset_name}"
+        
+        # Сохраняем файл
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Пробуем прочитать как CSV для проверки
+        try:
+            df = pd.read_csv(file_path)
+            rows, cols = df.shape
+            return {
+                "status": "success",
+                "message": f"Dataset uploaded successfully",
+                "filename": dataset_name,
+                "path": file_path,
+                "shape": f"{rows} rows × {cols} columns",
+                "size": len(contents)
+            }
+        except Exception as e:
+            # Если не CSV, всё равно сохраняем
+            return {
+                "status": "success",
+                "message": f"File uploaded (not a CSV)",
+                "filename": dataset_name,
+                "path": file_path,
+                "size": len(contents),
+                "warning": str(e)
+            }
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload dataset: {str(e)}"
+        )
 
 @app.get("/dvc/version")
 async def get_dvc_version():
