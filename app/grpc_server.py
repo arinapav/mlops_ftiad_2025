@@ -40,8 +40,8 @@ class ModelService(model_service_pb2_grpc.ModelServiceServicer):
             elif request.name == "logreg":
                 if 'max_iter' in params:
                     params['max_iter'] = int(params['max_iter'])
-            
-            model = self.trainer.train(request.name, data['X'], data['y'], **params)
+            trainer = ModelTrainer()
+            model = trainer.train(request.name, data['X'] if data else None, data['y']if data else None, "data_grpc", **params)
             self.storage.save(request.name, model)
             return model_service_pb2.TrainResponse(status="ok")
         except Exception as e:

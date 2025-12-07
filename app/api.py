@@ -8,6 +8,7 @@ from jose import jwt
 from passlib.context import CryptContext
 import os
 from dotenv import load_dotenv
+from fastapi import UploadFile, File
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="passlib")
 
@@ -37,7 +38,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 class TrainRequest(BaseModel):
     model_type: str
     params: dict
-    data: dict
+    data: dict = None
+    dataset_name: str = "data"  # для версионирования
 
 class PredictRequest(BaseModel):
     features: list
@@ -51,6 +53,7 @@ async def login():
 dependencies=[Depends(get_current_user)])
 async def train_model(request: TrainRequest):
     log.info(f"Training {request.model_type} with {request.params}")
+    trainer = ModelTrainer()
     model = trainer.train(request.model_type, request.data["X"], 
 request.data["y"], **request.params)
     storage.save(request.model_type, model)

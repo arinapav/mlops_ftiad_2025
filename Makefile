@@ -1,55 +1,106 @@
-.PHONY: install run test clean stop all
+.PHONY: all install clean
+.PHONY: dc-up dc-down mlflow-up mlflow-down init-buckets
+.PHONY: dvc-init dvc-pull dvc-push
+.PHONY: k8s-up k8s-down k8s-status
+.PHONY: full up down
 
-# Установка зависимостей
+# === Основные ===
 install:
 	@echo "Установка зависимостей..."
-	@poetry install || pip install -r requirements.txt
+	poetry install --no-interaction
 
-# Запуск всех сервисов в фоне
-run:
-	@echo "Запуск сервисов..."
-	@poetry run uvicorn app.api:app --port 8000 --reload > api.log 2>&1 &
-	@echo "REST API запущен на порту 8000"
-	@sleep 2
-	@poetry run python -m app.grpc_server > grpc.log 2>&1 &
-	@echo "gRPC сервер запущен на порту 50051"
-	@sleep 2
-	@poetry run streamlit run dashboard/app.py --server.port 8501 > dashboard.log 2>&1 &
-	@echo "Dashboard запущен на порту 8501"
-	@echo "Логи сохраняются в api.log, grpc.log, dashboard.log"
-	@echo "Открыть:"
-	@echo "   - API Docs: http://localhost:8000/docs"
-	@echo "   - Dashboard: http://localhost:8501"
-	@sleep 3
+clean:
+	@echo "Очистка временных файлов..."
+	rm -rf __pycache__ */__pycache__ */*/__pycache__
+	rm -rf .pytest_cache .dvc/cache
+	rm -f *.log
 
-# Тестирование
-test:
-	@echo "Запуск тестов..."
-	@poetry run pytest tests/test_api.py -v
-	@echo "Тестирование gRPC..."
-	@poetry run python tests/grpc_client_test.py
+# === Docker Compose ===
+dc-up:
+	@echo "Запуск Minio и приложения через docker compose..."
+	docker compose up -d --build
+	@echo "Ожидание готовности Minio..."
+	sleep 20
 
-# Остановка всех сервисов
-stop:
-	@echo "Остановка сервисов..."
-	@pkill -f "uvicorn app.api:app" || true
-	@pkill -f "app.grpc_server" || true
-	@pkill -f "streamlit run" || true
-	@echo "Все сервисы остановлены"
+dc-down:
+	@echo "Остановка контейнеров..."
+	docker compose down -v
 
-# Очистка
-clean: stop
-	@echo "Очистка..."
-	@rm -f *.log
-	@rm -rf __pycache__ */__pycache__ */*/__pycache__
-	@rm -rf .pytest_cache
-	@rm -f models/*.pkl
+mlflow-up:
+	@echo "MLflow уже запущен в основном compose"
 
-# Полный цикл: установка -> запуск -> тест -> остановка
-all: clean install run test
-	@echo "Все тесты пройдены!"
-	@echo "Сервисы работают. Используйте 'make stop' для остановки"
+mlflow-down:
+	docker compose -f docker-compose.mlflow.yml down -v
 
-# Быстрый запуск и тест
-quick: stop run test
-	@echo "Готово!"
+# === Minio: создание бакетов ===
+init-buckets:
+	@echo "Создание бакетов в Minio..."
+	docker run --rm --network host \
+		-e AWS_ACCESS_KEY_ID=minioadmin \
+		-e AWS_SECRET_ACCESS_KEY=minioadmin \
+		-e AWS_ENDPOINT_URL=http://localhost:9000 \
+		minio/mc alias set local http://localhost:9000 minioadmin minioadmin
+	docker run --rm --network host \
+		-e AWS_ACCESS_KEY_ID=minioadmin \
+		-e AWS_SECRET_ACCESS_KEY=minioadmin \
+		-e AWS_ENDPOINT_URL=http://localhost:9000 \
+		minio/mc mb local/models || true
+	docker run --rm --network host \
+		-e AWS_ACCESS_KEY_ID=minioadmin \
+		-e AWS_SECRET_ACCESS_KEY=minioadmin \
+		-e AWS_ENDPOINT_URL=http://localhost:9000 \
+		minio/mc mb local/datasets || true
+	docker run --rm --network host \
+		-e AWS_ACCESS_KEY_ID=minioadmin \
+		-e AWS_SECRET_ACCESS_KEY=minioadmin \
+		-e AWS_ENDPOINT_URL=http://localhost:9000 \
+		minio/mc mb local/mlflow-artifacts || true
+
+# === DVC ===
+dvc-init:
+	@echo "Инициализация DVC и настройка Minio remote..."
+	dvc init --no-scm || true -f
+	dvc remote add -d minio s3://datasets -f
+	dvc remote modify minio endpointurl http://localhost:9000
+	dvc remote modify minio access_key_id minioadmin
+	dvc remote modify minio secret_access_key minioadmin
+	git add .dvc .dvcignore || true
+	git commit -m "Initialize DVC with Minio remote" || echo "Nothing to commit"
+
+dvc-pull:
+	dvc pull || echo "Нет данных для pull (это нормально при первом запуске)"
+
+dvc-push:
+	dvc push
+
+# === Kubernetes ===
+MINIKUBE_PROFILE ?= mlops-hw2
+
+k8s-up:
+	@echo "Запуск Minikube и деплоя в Kubernetes..."
+	minikube start --profile=$(MINIKUBE_PROFILE) --driver=docker --cpus=4 --memory=8g
+	minikube addons enable ingress --profile=$(MINIKUBE_PROFILE)
+	kubectl apply -f k8s/
+	@echo "Проброс портов..."
+	kubectl port-forward svc/app 8000:8000 8501:8501 --address=0.0.0.0 &
+	kubectl port-forward svc/minio 9000:9000 9001:9001 --address=0.0.0.0 &
+	kubectl port-forward svc/mlflow 5000:5000 --address=0.0.0.0 &
+
+k8s-down:
+	minikube stop --profile=$(MINIKUBE_PROFILE) || true
+	minikube delete --profile=$(MINIKUBE_PROFILE) || true
+
+# === Весь запуск ===
+full: clean install dc-up mlflow-up init-buckets dvc-init dvc-pull
+	@echo "============================================"
+	@echo "Всё успешно запущено! Доступ:"
+	@echo "   API Docs:          http://localhost:8000/docs"
+	@echo "   Dashboard:         http://localhost:8501"
+	@echo "   Minio Console:     http://localhost:9001 (minioadmin/minioadmin)"
+	@echo "   MLflow UI:         http://localhost:5000"
+	@echo "   DVC настроен — загружай датасеты через дашборд"
+	@echo "============================================"
+
+# Удобные алиасы
+up: full
+down: dc-down mlflow-down

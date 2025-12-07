@@ -1,27 +1,47 @@
+import boto3
 import pickle
+import io
 import os
-from pathlib import Path
-
-Path("models").mkdir(exist_ok=True)
+from botocore.exceptions import ClientError
+from app.logger import log
 
 class Storage:
-    @staticmethod
-    def save(name: str, model):
-        with open(f"models/{name}.pkl", "wb") as f:
-            pickle.dump(model, f)
+    def __init__(self):
+        self.s3_client = boto3.client(
+            's3',
+            endpoint_url=os.getenv('MINIO_ENDPOINT', 'http://localhost:9000'),
+            aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'minioadmin'),
+            aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'minioadmin')
+        )
+        self.bucket = 'models'
 
-    @staticmethod
-    def load(name: str):
+    def save(self, name: str, model):
         try:
-            with open(f"models/{name}.pkl", "rb") as f:
-                return pickle.load(f)
-        except FileNotFoundError:
+            buffer = io.BytesIO()
+            pickle.dump(model, buffer)
+            buffer.seek(0)
+            self.s3_client.put_object(Bucket=self.bucket, Key=f"{name}.pkl", Body=buffer)
+            log.info(f"Model {name} saved to Minio")
+        except ClientError as e:
+            log.error(f"Error saving model: {e}")
+            raise
+
+    def load(self, name: str):
+        try:
+            response = self.s3_client.get_object(Bucket=self.bucket, Key=f"{name}.pkl")
+            buffer = io.BytesIO(response['Body'].read())
+            model = pickle.load(buffer)
+            log.info(f"Model {name} loaded from Minio")
+            return model
+        except ClientError:
+            log.warning(f"Model {name} not found in Minio")
             return None
 
-    @staticmethod
-    def delete(name: str):
+    def delete(self, name: str):
         try:
-            os.remove(f"models/{name}.pkl")
+            self.s3_client.delete_object(Bucket=self.bucket, Key=f"{name}.pkl")
+            log.info(f"Model {name} deleted from Minio")
             return True
-        except FileNotFoundError:
+        except ClientError:
+            log.warning(f"Model {name} not found in Minio")
             return False
