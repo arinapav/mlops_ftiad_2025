@@ -46,7 +46,7 @@ dvc-init:
 	@echo "Настройка DVC..."
 	dvc init --no-scm -f 2>/dev/null || true
 	dvc remote add -d minio s3://datasets -f 2>/dev/null || true
-	dvc remote modify minio endpointurl http://localhost:9000
+	dvc remote modify minio endpointurl http://minio:9000
 	dvc remote modify minio access_key_id minioadmin
 	dvc remote modify minio secret_access_key minioadmin
 
