@@ -119,6 +119,10 @@ mlops_ftiad_2025/
    make dc-up
    make init-buckets
    make dvc-init
+
+   или
+
+   make full
    ```
 
 3. Доступ к сервисам:
