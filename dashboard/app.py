@@ -107,3 +107,25 @@ if st.button("Обучить модель", type="primary"):
                 params = {
                     "max_iter": int(max_iter),
                     "C": float(C)}
+		payload = {
+                	"model_type": train_model_type,
+                	"params": params,
+                	"dataset_name": train_dataset_name
+            	}
+            	r = requests.post("http://127.0.0.1:8000/train/", json=payload, headers=headers)
+            	if r.status_code == 200:
+                	st.success(f"Модель `{train_model_type}` обучена!")
+                	st.json(r.json())
+            	else:
+                	st.error(f"Ошибка: {r.text}")
+         except Exception as e:
+            st.error(f"Ошибка: {e}")
+
+st.markdown("---")
+st.markdown("### Статус")
+if st.button("Проверить API"):
+    try:
+        r = requests.get("http://127.0.0.1:8000/health")
+        st.success("API работает!")
+    except:
+        st.error("API недоступен")
