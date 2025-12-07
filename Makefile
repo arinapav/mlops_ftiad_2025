@@ -34,30 +34,13 @@ mlflow-down:
 
 # === Minio: создание бакетов ===
 init-buckets:
-	@echo "Ожидаем готовности Minio (40 сек)..."
-	sleep 40
+	@echo "Ожидаем готовности Minio (30 сек)..."
+	sleep 30
 	@echo "Создаём бакеты..."
-	docker run --rm --network host \
-		-e AWS_ACCESS_KEY_ID=minioadmin \
-		-e AWS_SECRET_ACCESS_KEY=minioadmin \
-		-e AWS_ENDPOINT_URL=http://localhost:9000 \
-		minio/mc alias set local http://localhost:9000 minioadmin minioadmin || true
-	docker run --rm --network host \
-		-e AWS_ACCESS_KEY_ID=minioadmin \
-		-e AWS_SECRET_ACCESS_KEY=minioadmin \
-		-e AWS_ENDPOINT_URL=http://localhost:9000 \
-		minio/mc mb local/models || true
-	docker run --rm --network host \
-		-e AWS_ACCESS_KEY_ID=minioadmin \
-		-e AWS_SECRET_ACCESS_KEY=minioadmin \
-		-e AWS_ENDPOINT_URL=http://localhost:9000 \
-		minio/mc mb local/datasets || true
-	docker run --rm --network host \
-		-e AWS_ACCESS_KEY_ID=minioadmin \
-		-e AWS_SECRET_ACCESS_KEY=minioadmin \
-		-e AWS_ENDPOINT_URL=http://localhost:9000 \
-		minio/mc mb local/mlflow-artifacts || true
-
+	docker compose exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+	docker compose exec minio mc mb local/models || true
+	docker compose exec minio mc mb local/datasets || true
+	docker compose exec minio mc mb local/mlflow-artifacts || true
 # DVC
 dvc-init:
 	@echo "Настройка DVC..."

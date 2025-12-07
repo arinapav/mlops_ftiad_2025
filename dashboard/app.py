@@ -2,6 +2,19 @@ import streamlit as st
 import requests
 import json
 
+import streamlit as st
+import os
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Логируем переменные окружения
+logger.debug(f"MINIO_ENDPOINT: {os.getenv('MINIO_ENDPOINT')}")
+logger.debug(f"MINIO_ACCESS_KEY: {os.getenv('MINIO_ACCESS_KEY')}")
+logger.debug(f"MINIO_SECRET_KEY: {os.getenv('MINIO_SECRET_KEY')}")
+
 st.set_page_config(page_title="MLOps HW2 — Dashboard", layout="wide")
 st.title("MLOps Homework 2 — Dashboard")
 

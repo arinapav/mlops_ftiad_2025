@@ -15,16 +15,16 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-
+      
   mlflow:
     image: python:3.11-slim
     command: >
-      sh -c "pip install mlflow boto3 && 
-             mlflow server 
-             --host 0.0.0.0 
-             --port 5000 
-             --backend-store-uri sqlite:///mlflow/mlflow.db 
-             --default-artifact-root s3://mlflow-artifacts 
+      sh -c "pip install mlflow boto3 &&
+             mlflow server
+             --host 0.0.0.0
+             --port 5000
+             --backend-store-uri sqlite:///mlflow/mlflow.db
+             --default-artifact-root s3://mlflow-artifacts
              --no-serve-artifacts"
     ports:
       - "5000:5000"
@@ -32,33 +32,57 @@ services:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      # Добавьте эти переменные для совместимости с boto3
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
     volumes:
       - mlflow_data:/mlflow
-    depends_on:
+    depends_on: 
       minio:
-        condition: service_healthy
-
+        condition: service_healthy   
+    
   app:
     build: .
-    ports:
+    ports:  
       - "8000:8000"
       - "50051:50051"
       - "8501:8501"
-    environment:
+    environment:   
+      # Основные настройки MinIO
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
+      MINIO_SECURE: "0"  # HTTP вместо HTTPS
+      
+      # Настройки AWS S3 (для boto3 и других библиотек)
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
+      AWS_S3_ENDPOINT: http://minio:9000
+      
+      # MLflow
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      
+      # DVC
+      DVC_REMOTE: minio
+      DVC_REMOTE_URL: s3://datasets
+      
+      # Флаг для дашборда
+      DOCKER_ENV: "true"
     depends_on:
-      minio:
+      minio:  
         condition: service_healthy
       mlflow:
         condition: service_started
     volumes:
       - .:/app
       - dvc_cache:/app/.dvc/cache
-
-volumes:
+      # Добавьте volume для кэша MinIO (опционально)
+      - minio_cache:/root/.cache/minio
+             
+volumes:  
   minio_data:
-  mlflow_data:
+  mlflow_data:  
   dvc_cache:
+  minio_cache:
