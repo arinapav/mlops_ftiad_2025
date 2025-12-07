@@ -106,49 +106,88 @@ async def upload_dataset(
     file: UploadFile = File(...),
     dataset_name: str = Form("dataset.csv")
 ):
-    """Загрузить датасет и сохранить в локальную папку"""
+    """
+    Загрузить датасет, сохранить в /app/datasets
+    и сразу заверсионировать в DVC (remote Minio).
+    """
     try:
-        # Создаем папку datasets если её нет
+        #  Локально сохраняем файл
         os.makedirs("/app/datasets", exist_ok=True)
-        
-        # Определяем путь для сохранения
-        if not dataset_name.endswith('.csv'):
-            dataset_name += '.csv'
-        
+
+        if not dataset_name.endswith(".csv"):
+            dataset_name += ".csv"
+
         file_path = f"/app/datasets/{dataset_name}"
-        
-        # Сохраняем файл
+        # относительный путь для DVC (важно, т.к. cwd=/app)
+        dvc_path = f"datasets/{dataset_name}"
+
         contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(contents)
-        
-        # Пробуем прочитать как CSV для проверки
+
+        # Добавляем файл в DVC
+        add_result = subprocess.run(
+            ["dvc", "add", dvc_path],
+            capture_output=True,
+            text=True,
+            cwd="/app",
+        )
+        if add_result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"DVC add failed: {add_result.stderr}",
+            )
+
+        commit_result = subprocess.run(
+            ["dvc", "commit", "-f"],
+            capture_output=True,
+            text=True,
+            cwd="/app",
+        )
+        if commit_result.returncode != 0:
+            # не фейлим запрос, но логируем
+            logger.warning(f"DVC commit failed: {commit_result.stderr}")
+
+        # Отправляем данные в remote (Minio)
+        push_result = subprocess.run(
+            ["dvc", "push"],
+            capture_output=True,
+            text=True,
+            cwd="/app",
+        )
+        if push_result.returncode != 0:
+            # тут уже лучше явно сообщить об ошибке Minio/DVC
+            raise HTTPException(
+                status_code=500,
+                detail=f"DVC push failed: {push_result.stderr}",
+            )
+
         try:
             df = pd.read_csv(file_path)
             rows, cols = df.shape
-            return {
-                "status": "success",
-                "message": f"Dataset uploaded successfully",
-                "filename": dataset_name,
-                "path": file_path,
-                "shape": f"{rows} rows × {cols} columns",
-                "size": len(contents)
-            }
+            shape = f"{rows} rows × {cols} columns"
         except Exception as e:
-            # Если не CSV, всё равно сохраняем
-            return {
-                "status": "success",
-                "message": f"File uploaded (not a CSV)",
-                "filename": dataset_name,
-                "path": file_path,
-                "size": len(contents),
-                "warning": str(e)
-            }
-            
+            shape = None
+            logger.warning(f"Failed to read CSV {file_path}: {e}")
+
+        return {
+            "status": "success",
+            "message": "Dataset uploaded and pushed to DVC/Minio",
+            "filename": dataset_name,
+            "path": file_path,
+            "shape": shape,
+            "size": len(contents),
+            "dvc_add": add_result.stdout,
+            "dvc_push": push_result.stdout,
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Failed to upload dataset: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload dataset: {str(e)}"
+            detail=f"Failed to upload dataset: {str(e)}",
         )
 
 @app.get("/dvc/version")

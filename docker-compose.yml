@@ -20,14 +20,13 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     command: >
-      sh -c "
-        sleep 10 &&
         mlflow server 
           --host 0.0.0.0 
           --port 5000 
           --backend-store-uri sqlite:///mlflow/mlflow.db 
           --default-artifact-root s3://mlflow-artifacts
-      "
+          --allowed-hosts '*'
+          --cors-allowed-origins '*'
     ports:
       - "5000:5000"
     environment:
@@ -53,6 +52,11 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
     depends_on:
       minio:
         condition: service_healthy
