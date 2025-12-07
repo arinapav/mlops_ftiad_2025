@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlops-app
+  template:
+    metadata:
+      labels:
+        app: mlops-app
+    spec:
+      containers:
+      - name: app
+        image: yourusername/mlops-app:latest  # Соберите и запушьте образ
+        ports:
+        - containerPort: 8000
+        - containerPort: 50051
+        env:
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        # ... другие env
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+spec:
+  selector:
+    app: mlops-app
+  ports:
+  - port: 8000
+    targetPort: 8000
+  - port: 50051
+    targetPort: 50051
+  type: LoadBalancer
