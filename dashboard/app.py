@@ -106,5 +106,4 @@ if st.button("Обучить модель", type="primary"):
             else:  # logreg
                 params = {
                     "max_iter": int(max_iter),
-                    "C": float(C)
-                }
+                    "C": float(C)}

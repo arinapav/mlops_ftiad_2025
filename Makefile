@@ -34,12 +34,14 @@ mlflow-down:
 
 # === Minio: создание бакетов ===
 init-buckets:
-	@echo "Создание бакетов в Minio..."
+	@echo "Ожидаем готовности Minio (40 сек)..."
+	sleep 40
+	@echo "Создаём бакеты..."
 	docker run --rm --network host \
 		-e AWS_ACCESS_KEY_ID=minioadmin \
 		-e AWS_SECRET_ACCESS_KEY=minioadmin \
 		-e AWS_ENDPOINT_URL=http://localhost:9000 \
-		minio/mc alias set local http://localhost:9000 minioadmin minioadmin
+		minio/mc alias set local http://localhost:9000 minioadmin minioadmin || true
 	docker run --rm --network host \
 		-e AWS_ACCESS_KEY_ID=minioadmin \
 		-e AWS_SECRET_ACCESS_KEY=minioadmin \
@@ -56,16 +58,14 @@ init-buckets:
 		-e AWS_ENDPOINT_URL=http://localhost:9000 \
 		minio/mc mb local/mlflow-artifacts || true
 
-# === DVC ===
+# DVC
 dvc-init:
-	@echo "Инициализация DVC и настройка Minio remote..."
-	dvc init --no-scm || true -f
-	dvc remote add -d minio s3://datasets -f
+	@echo "Настройка DVC..."
+	dvc init --no-scm -f 2>/dev/null || true
+	dvc remote add -d minio s3://datasets -f 2>/dev/null || true
 	dvc remote modify minio endpointurl http://localhost:9000
 	dvc remote modify minio access_key_id minioadmin
 	dvc remote modify minio secret_access_key minioadmin
-	git add .dvc .dvcignore || true
-	git commit -m "Initialize DVC with Minio remote" || echo "Nothing to commit"
 
 dvc-pull:
 	dvc pull || echo "Нет данных для pull (это нормально при первом запуске)"
