@@ -5,7 +5,7 @@
 ## Описание
 
 Сервис для управления ML‑моделями с REST API, gRPC интерфейсом и веб‑дашбордом.  
-Во 2‑й части добавлены: хранение данных и моделей в S3‑совместимом хранилище Minio, версионирование датасетов с помощью DVC, трекинг экспериментов в MLflow, запуск через Docker Compose и деплой в Kubernetes (Minikube) [1].
+Во 2‑й части добавлены: хранение данных и моделей в S3‑совместимом хранилище Minio, версионирование датасетов с помощью DVC, трекинг экспериментов в MLflow, запуск через Docker Compose и деплой в Kubernetes (Minikube).
 
 ## Структура проекта
 
@@ -25,11 +25,11 @@ mlops_ftiad_2025/
 │   ├── test_api.py         # Тесты REST API
 │   └── grpc_client_test.py # Тесты gRPC
 ├── models/                 # Локальная директория для моделей
-├── docker-compose.yml      # Minio + MLflow + приложение [file:13]
-├── k8s/                    # Манифесты для деплоя в Kubernetes (Minikube) [file:13]
+├── docker-compose.yml      # Minio + MLflow + приложение
+├── k8s/                    # Манифесты для деплоя в Kubernetes (Minikube)
 ├── pyproject.toml          # Зависимости Poetry
 ├── poetry.lock             # Lock-файл зависимостей
-└── Makefile                # Автоматизация команд (Docker, DVC, Kubernetes) [file:13]
+└── Makefile                # Автоматизация команд (Docker, DVC, Kubernetes)
 ```
 
 ## Основные компоненты
@@ -69,28 +69,28 @@ mlops_ftiad_2025/
 
 ### Minio + DVC + S3‑хранилище
 
-- Minio развёрнут как сервис в `docker-compose.yml` и используется как S3‑совместимое хранилище [1].  
-- DVC настроен на удалённый remote `s3://datasets` в Minio и используется для версионирования датасетов (инициализация и настройка — через таргет `make dvc-init`) [1].  
+- Minio развёрнут как сервис в `docker-compose.yml` и используется как S3‑совместимое хранилище  
+- DVC настроен на удалённый remote `s3://datasets` в Minio и используется для версионирования датасетов (инициализация и настройка — через таргет `make dvc-init`)
 
 ### MLflow
 
-- MLflow сервер развёрнут в Docker Compose и использует Minio как artifact store (`s3://mlflow-artifacts`) [1].  
+- MLflow сервер развёрнут в Docker Compose и использует Minio как artifact store (`s3://mlflow-artifacts`)
 - Приложение логирует эксперименты (модели, метрики, артефакты) в MLflow, трекинг‑сервер доступен через MLflow UI.  
 
 ### Docker Compose
 
-- Единый `docker-compose.yml` поднимает три сервиса: `minio`, `mlflow`, `app` (FastAPI + gRPC + Streamlit) [1].  
+- Единый `docker-compose.yml` поднимает три сервиса: `minio`, `mlflow`, `app` (FastAPI + gRPC + Streamlit)
 - В `Makefile` предусмотрены таргеты:
   - `make dc-up` — поднять стек Minio + MLflow + приложение в Docker  
   - `make dc-down` — остановить и удалить контейнеры  
-  - `make init-buckets` — создать бакеты в Minio (`models`, `datasets`, `mlflow-artifacts`) [1]
+  - `make init-buckets` — создать бакеты в Minio (`models`, `datasets`, `mlflow-artifacts`)
   - `make dvc-init`, `make dvc-pull`, `make dvc-push` — работа с DVC‑remote  
 
 ### Kubernetes (Minikube)
 
-- В каталоге `k8s/` лежат манифесты для деплоя приложения, Minio и MLflow в кластер Minikube [1].  
+- В каталоге `k8s/` лежат черновики для деплоя приложения, Minio и MLflow в кластер Minikube   
 - В `Makefile` есть таргеты:
-  - `make k8s-up` — старт Minikube, применение манифестов и проброс портов (8000, 8501, 9000, 9001, 5000) [1]
+  - `make k8s-up` — старт Minikube, применение манифестов и проброс портов (8000, 8501, 9000, 9001, 5000) 
   - `make k8s-down` — остановка и удаление Minikube‑кластера  
 
 ## Поддерживаемые модели
