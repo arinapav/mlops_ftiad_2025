@@ -87,3 +87,24 @@ full: clean install dc-up mlflow-up init-buckets dvc-init dvc-pull
 # Удобные алиасы
 up: full
 down: dc-down mlflow-down
+
+# === Команды для ДЗ-3 (5 баллов) ===
+
+# 1. Сборка Docker-образа и пуш в Docker Hub
+build-and-push:
+	@echo "Сборка Docker-образа..."
+	docker build -t arinapav/mlops-ftiad-2025:latest -f docker/Dockerfile .
+	@echo "Пуш в Docker Hub..."
+	docker push arinapav/mlops-ftiad-2025:latest
+
+# 2. Запуск тестов
+test:
+	@echo "Запуск unit-тестов..."
+	poetry run pytest -v
+
+# 3. Запуск линтеров
+lint:
+	@echo "Запуск линтеров..."
+	poetry run flake8 app tests
+	poetry run black --check app tests
+	poetry run isort --check-only app tests
